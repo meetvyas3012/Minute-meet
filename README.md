@@ -1,4 +1,3 @@
-````markdown
 # Automated Meeting Minutes Generator
 
 This project automates the process of transcribing, summarizing, and generating meeting minutes from an audio file using OpenAI Whisper, Facebook BART, Google FLAN-T5, and SpaCy. It outputs a well-formatted PDF with all essential meeting details.
@@ -21,7 +20,7 @@ This project automates the process of transcribing, summarizing, and generating 
 !apt-get install fonts-noto
 !pip install fpdf
 !pip install transformers torch
-````
+
 
 ## Usage
 
