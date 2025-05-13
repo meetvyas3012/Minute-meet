@@ -20,7 +20,7 @@ This project automates the process of transcribing, summarizing, and generating 
 !apt-get install fonts-noto
 !pip install fpdf
 !pip install transformers torch
-
+```
 
 ## Usage
 
