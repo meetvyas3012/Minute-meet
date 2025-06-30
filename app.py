@@ -8,27 +8,29 @@ from transformers import pipeline
 from langchain_community.llms import HuggingFacePipeline
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-import tempfile
-import os
+import tempfile, os
 
-# ——— Load & cache models ———
-@st.cache_resource
+# 1. Whisper
+@st.cache_resource(show_spinner=False)
 def load_whisper():
-    return whisper.load_model("base")
-@st.cache_resource
-def load_spacy():
-    return spacy.load("en_core_web_sm")
-@st.cache_resource
-def load_pipelines():
-    summarizer = pipeline("summarization", model="facebook/bart-large-cnn", device=-1)
-    qa = pipeline("text2text-generation", model="google/flan-t5-large", device=-1)
-    return (
-        HuggingFacePipeline(pipeline=summarizer),
-        HuggingFacePipeline(pipeline=qa),
-    )
+    return whisper.load_model("tiny")  # <<< switch to tiny
 
 whisper_model = load_whisper()
+
+# 2. spaCy
+@st.cache_resource(show_spinner=False)
+def load_spacy():
+    return spacy.load("en_core_web_sm")
+
 spacy_nlp = load_spacy()
+
+# 3. HF pipelines & LangChain
+@st.cache_resource(show_spinner=False)
+def load_pipelines():
+    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+    qa = pipeline("text2text-generation", model="google/flan-t5-large")
+    return HuggingFacePipeline(pipeline=summarizer), HuggingFacePipeline(pipeline=qa)
+
 llm_summarizer, llm_qa = load_pipelines()
 
 # ——— Chains & Prompts ———
