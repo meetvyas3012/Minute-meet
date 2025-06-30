@@ -97,7 +97,7 @@ if uploaded:
 
     # 3) Transcribe from array
     st.info("Transcribing…")
-    result = whisper_model.transcribe(audio_array)
+    result = whisper_model.transcribe(tmp_path)
     transcript = result["text"]
     st.success("✅ Transcription complete")
 
