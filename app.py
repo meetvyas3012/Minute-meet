@@ -9,6 +9,7 @@ from langchain_community.llms import HuggingFacePipeline
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 import tempfile, os
+import librosa
 
 # 1. Whisper
 @st.cache_resource(show_spinner=False)
@@ -87,8 +88,11 @@ if uploaded:
         tmp.write(uploaded.read())
         path = tmp.name
 
-    st.info("Transcribing…")
+        st.info("Transcribing…")
     transcript = whisper_model.transcribe(path)["text"]
+       # load via librosa to avoid needing a system ffmpeg
+    audio_array, sr = librosa.load(path, sr=16000)
+    transcript = whisper_model.transcribe(audio_array)["text"]
     st.success("Transcription complete")
 
     st.subheader("Transcript Preview")
