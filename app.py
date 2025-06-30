@@ -84,24 +84,24 @@ st.title("🎤 Meeting Minutes Generator")
 
 uploaded = st.file_uploader("Upload audio (.mp3/.wav)", type=["mp3","wav"])
 if uploaded:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded.name)[1]) as tmp:
-        tmp.write(uploaded.read())
-        path = tmp.name
+    # 1) Save uploaded file
+    suffix = os.path.splitext(uploaded.name)[1]
+    tmp_path = f"temp_audio{suffix}"
+    with open(tmp_path, "wb") as f:
+        f.write(uploaded.getbuffer())
 
+    # 2) Load with librosa (avoids ffmpeg)
+    st.info("Loading audio into memory…")
+    audio_array, sr = librosa.load(tmp_path, sr=16_000, mono=True)
+    st.write(f"✅ Audio loaded: shape={audio_array.shape}, sr={sr}")
+
+    # 3) Transcribe from array
     st.info("Transcribing…")
-
-# — Load audio via librosa to avoid ffmpeg —
-    audio_array, sr = librosa.load(path, sr=16_000, mono=True)
-    
-    # — Transcribe from the raw numpy array —
     result = whisper_model.transcribe(audio_array)
     transcript = result["text"]
-    
-    st.success("Transcription complete")
+    st.success("✅ Transcription complete")
 
-
-    st.subheader("Transcript Preview")
-    st.text_area("", transcript[:1000] + "…", height=200)
+    st.text_area("Transcript preview", transcript[:1000] + "…", height=200)
 
     st.info("Generating summary & extracting…")
     summary = summary_chain.run(transcript[:2000])
