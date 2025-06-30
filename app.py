@@ -1,40 +1,41 @@
 import streamlit as st
 import whisper
+import librosa
+import os
 import spacy
 import re
 from datetime import datetime
 from fpdf import FPDF
 from transformers import pipeline
-from langchain_community.llms import HuggingFacePipeline
-from langchain.chains import LLMChain
+
+# New imports:
+from langchain_huggingface import HuggingFacePipeline
+from langchain.schema import RunnableSequence
 from langchain.prompts import PromptTemplate
-import tempfile, os
-import librosa
 
-# 1. Whisper
-@st.cache_resource(show_spinner=False)
+# ——— Model loading caches ———
+@st.cache_resource
 def load_whisper():
-    return whisper.load_model("tiny")  # <<< switch to tiny
+    return whisper.load_model("tiny")
 
-whisper_model = load_whisper()
-
-# 2. spaCy
-@st.cache_resource(show_spinner=False)
+@st.cache_resource
 def load_spacy():
     return spacy.load("en_core_web_sm")
 
-spacy_nlp = load_spacy()
-
-# 3. HF pipelines & LangChain
-@st.cache_resource(show_spinner=False)
+@st.cache_resource
 def load_pipelines():
     summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-    qa = pipeline("text2text-generation", model="google/flan-t5-large")
-    return HuggingFacePipeline(pipeline=summarizer), HuggingFacePipeline(pipeline=qa)
+    qa         = pipeline("text2text-generation", model="google/flan-t5-large")
+    return (
+      HuggingFacePipeline(pipeline=summarizer),
+      HuggingFacePipeline(pipeline=qa),
+    )
 
+whisper_model = load_whisper()
+spacy_nlp     = load_spacy()
 llm_summarizer, llm_qa = load_pipelines()
 
-# ——— Chains & Prompts ———
+# ——— Prompts & Runnables ———
 summary_prompt = PromptTemplate(
     input_variables=["transcript"],
     template="Summarize the following meeting transcript:\n\n{transcript}"
@@ -43,8 +44,10 @@ qa_prompt = PromptTemplate(
     input_variables=["question", "context"],
     template="{question}\n\n{context}"
 )
-summary_chain = LLMChain(llm=llm_summarizer, prompt=summary_prompt)
-qa_chain = LLMChain(llm=llm_qa, prompt=qa_prompt)
+
+# Build RunnableSequences instead of deprecated LLMChains
+summary_chain = summary_prompt | llm_summarizer
+qa_chain      = qa_prompt      | llm_qa
 
 # ——— PDF helper ———
 class MeetingMinutesPDF(FPDF):
