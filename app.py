@@ -84,24 +84,26 @@ def extract_metadata(text):
 # ——— Streamlit UI ———
 st.title("🎤 Meeting Minutes Generator")
 
-uploaded = st.file_uploader("Upload audio (.mp3/.wav)", type=["mp3","wav"])
-if uploaded:
-    # 1) Save uploaded file
-    suffix = os.path.splitext(uploaded.name)[1]
-    tmp_path = f"temp_audio{suffix}"
-    with open(tmp_path, "wb") as f:
-        f.write(uploaded.getbuffer())
+uploaded_file = st.file_uploader("Upload an audio file (.mp3, .wav)", type=["mp3", "wav", "m4a"])
 
-    # 2) Load with librosa (avoids ffmpeg)
+if uploaded_file is not None:
+    # Save uploaded file to a temporary path
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+        tmp.write(uploaded_file.read())
+        tmp_path = tmp.name
 
+    st.info("Transcribing with Whisper...")
 
-    # 3) Transcribe from array
-    st.info("Transcribing…")
-    result = whisper_model.transcribe(tmp_path)
-    transcript = result["text"]
-    st.success("✅ Transcription complete")
-
-    st.text_area("Transcript preview", transcript[:1000] + "…", height=200)
+    try:
+        # Whisper automatically uses ffmpeg to handle file
+        result = whisper_model.transcribe(tmp_path)
+        transcript = result["text"]
+        st.success("Transcription complete!")
+        st.text_area("Transcript", transcript[:2000], height=300)
+    except Exception as e:
+        st.error(f"Failed to transcribe: {e}")
+    finally:
+        os.unlink(tmp_path)  # clean up
 
     st.info("Generating summary & extracting…")
     summary = summary_chain.run(transcript[:2000])
