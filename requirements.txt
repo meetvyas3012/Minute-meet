@@ -2,10 +2,9 @@ streamlit
 openai-whisper
 torch
 transformers
-accelerate
-langchain>=0.4.0
-langchain-huggingface
+langchain==0.2.17
 langchain-community
+langchain-huggingface
 spacy>=3.5.4
 en-core-web-sm
 fpdf2
