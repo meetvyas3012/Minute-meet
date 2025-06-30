@@ -10,7 +10,6 @@ from transformers import pipeline
 
 # New imports:
 from langchain_huggingface import HuggingFacePipeline
-from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
 # ——— Model loading caches ———
@@ -46,8 +45,8 @@ qa_prompt = PromptTemplate(
 )
 
 # Build RunnableSequences instead of deprecated LLMChains
-summary_chain = LLMChain(llm=llm_summarizer, prompt=summary_prompt)
-qa_chain      = LLMChain(llm=llm_qa,      prompt=qa_prompt)
+summary_chain = summary_prompt | llm_summarizer
+qa_chain      = qa_prompt | llm_qa
 
 # ——— PDF helper ———
 class MeetingMinutesPDF(FPDF):
