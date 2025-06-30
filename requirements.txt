@@ -10,3 +10,4 @@ en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_
 fpdf2
 librosa
 soundfile
+ffmpeg
