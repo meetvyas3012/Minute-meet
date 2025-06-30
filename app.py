@@ -89,9 +89,16 @@ if uploaded:
         path = tmp.name
 
     st.info("Transcribing…")
-    audio_array, sr = librosa.load(path, sr=16000)
-    transcript = whisper_model.transcribe(audio_array)["text"]
+
+# — Load audio via librosa to avoid ffmpeg —
+    audio_array, sr = librosa.load(path, sr=16_000, mono=True)
+    
+    # — Transcribe from the raw numpy array —
+    result = whisper_model.transcribe(audio_array)
+    transcript = result["text"]
+    
     st.success("Transcription complete")
+
 
     st.subheader("Transcript Preview")
     st.text_area("", transcript[:1000] + "…", height=200)
