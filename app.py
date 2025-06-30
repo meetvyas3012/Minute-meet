@@ -7,6 +7,7 @@ import re
 from datetime import datetime
 from fpdf import FPDF
 from transformers import pipeline
+import tempfile
 
 # New imports:
 from langchain_huggingface import HuggingFacePipeline
