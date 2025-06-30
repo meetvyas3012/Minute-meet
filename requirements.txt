@@ -3,7 +3,6 @@ openai-whisper
 torch
 transformers
 accelerate
-langchain
 langchain-community
 spacy
 fpdf2
