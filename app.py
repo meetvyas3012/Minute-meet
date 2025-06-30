@@ -93,9 +93,7 @@ if uploaded:
         f.write(uploaded.getbuffer())
 
     # 2) Load with librosa (avoids ffmpeg)
-    st.info("Loading audio into memory…")
-    audio_array, sr = librosa.load(tmp_path, sr=16_000, mono=True)
-    st.write(f"✅ Audio loaded: shape={audio_array.shape}, sr={sr}")
+
 
     # 3) Transcribe from array
     st.info("Transcribing…")
