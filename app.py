@@ -13,7 +13,6 @@ import tempfile
 
 # ——— New LangChain/HuggingFace imports ———
 from langchain_huggingface import HuggingFacePipeline
-from langchain.schema import RunnableSequence
 from langchain.prompts import PromptTemplate
 
 # ─── CACHE MODELS ──────────────────────────
