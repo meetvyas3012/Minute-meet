@@ -2,11 +2,8 @@ streamlit
 openai-whisper
 torch
 transformers
-langchain==0.2.17
+accelerate
 langchain-community
-langchain-huggingface
-spacy>=3.5.4
-en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.5.0/en_core_web_sm-3.5.0-py3-none-any.whl
+spacy
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.5.0/en_core_web_sm-3.5.0-py3-none-any.whl
 fpdf2
-librosa
-soundfile
