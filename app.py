@@ -10,6 +10,9 @@ from datetime import datetime
 from fpdf import FPDF
 from transformers import pipeline
 import tempfile
+import subprocess
+import numpy as np
+import torch
 
 # ——— New LangChain/HuggingFace imports ———
 from langchain_huggingface import HuggingFacePipeline
@@ -110,21 +113,29 @@ tmp.close()
 
 # transcribe
 st.info("⏳ Transcribing with Whisper…")
-try:
-    res = whisper_model.transcribe(tmp.name)
-    transcript = res["text"]
-    st.success("✅ Transcription complete")
-except Exception as e:
-    st.error(f"Transcription error: {e}")
-    os.unlink(tmp.name)
-    st.stop()
-os.unlink(tmp.name)
+def load_audio_ffmpeg(file_path):
+    cmd = [
+        "ffmpeg", "-i", file_path,
+        "-f", "f32le", "-ar", "16000", "-ac", "1", "pipe:1"
+    ]
+    out = subprocess.check_output(cmd)
+    audio = np.frombuffer(out, np.float32)
+    return audio
 
-st.text_area("🔊 Transcript Preview", transcript[:2000]+"…", height=200)
+try:
+    audio = load_audio_ffmpeg(tmp_path)
+    result = whisper_model.transcribe(audio, language='en')
+    transcript = result["text"]
+    st.success("Transcription complete!")
+    st.text_area("Transcript", transcript[:2000], height=300)
+except Exception as e:
+    import traceback
+    st.error("Failed to transcribe.")
+    st.text(traceback.format_exc())
 
 # summarize & extract
 st.info("🧠 Generating summary & extraction…")
-summary     = summary_chain.invoke({"transcript": transcript[:2000]})
+summary     = summary_chain.invoke({"transcript": transcript[:1000]})
 date, ppl    = extract_meta(transcript)
 actions     = qa_chain.invoke({"question":"Extract the action items and responsibilities:", "context":transcript})
 next_steps  = qa_chain.invoke({"question":"List next steps and follow‑ups:", "context":transcript})
