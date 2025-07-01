@@ -123,7 +123,7 @@ def load_audio_ffmpeg(file_path):
     return audio
 
 try:
-    audio = load_audio_ffmpeg(tmp_path)
+    audio = load_audio_ffmpeg(tmp.name)
     result = whisper_model.transcribe(audio, language='en')
     transcript = result["text"]
     st.success("Transcription complete!")
