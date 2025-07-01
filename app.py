@@ -1,6 +1,3 @@
-import warnings
-warnings.filterwarnings("ignore", message="FP16 is not supported on CPU")  # silence Whisper FP16 warning
-
 import streamlit as st
 import whisper
 import os
@@ -9,160 +6,132 @@ import re
 from datetime import datetime
 from fpdf import FPDF
 from transformers import pipeline
-import tempfile
-import subprocess
-import numpy as np
-import torch
-
-# ——— New LangChain/HuggingFace imports ———
 from langchain_huggingface import HuggingFacePipeline
 from langchain.prompts import PromptTemplate
+import tempfile
 
-# ─── CACHE MODELS ──────────────────────────
-
+# ——— Load Models ———
 @st.cache_resource
-def load_whisper():
-    # smaller model for speed
+def load_whisper_model():
     return whisper.load_model("tiny")
 
 @st.cache_resource
-def load_spacy():
+def load_spacy_model():
     return spacy.load("en_core_web_sm")
 
 @st.cache_resource
-def load_pipelines():
-    summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6", device=-1)
-    qa         = pipeline("text2text-generation", model="google/flan-t5-small", device=-1)
-    return (
-        HuggingFacePipeline(pipeline=summarizer),
-        HuggingFacePipeline(pipeline=qa),
-    )
+def load_langchain_pipelines():
+    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+    qa_model   = pipeline("text2text-generation", model="google/flan-t5-large")
+    return HuggingFacePipeline(pipeline=summarizer), HuggingFacePipeline(pipeline=qa_model)
 
-whisper_model   = load_whisper()
-spacy_nlp       = load_spacy()
-llm_summarizer, llm_qa = load_pipelines()
+whisper_model = load_whisper_model()
+spacy_nlp = load_spacy_model()
+llm_summarizer, llm_qa = load_langchain_pipelines()
 
-# ─── PROMPTS & SEQUENCES ────────────────────
-
+# ——— LangChain Prompts ———
 summary_prompt = PromptTemplate(
     input_variables=["transcript"],
     template="Summarize the following meeting transcript:\n\n{transcript}"
 )
+
 qa_prompt = PromptTemplate(
     input_variables=["question", "context"],
     template="{question}\n\n{context}"
 )
 
-# build RunnableSequences
+# Use `|` as RunnableSequence (no import of RunnableSequence needed)
 summary_chain = summary_prompt | llm_summarizer
-qa_chain      = qa_prompt      | llm_qa
+qa_chain = qa_prompt | llm_qa
 
-# ─── PDF BUILDER ────────────────────────────
-
-class MeetingMinutesPDF(FPDF):
+# ——— PDF Generator ———
+class MeetingPDF(FPDF):
     def header(self):
-        self.set_font("Arial","B",16)
-        self.cell(0,10,"MEETING MINUTES",ln=True,align="C")
-        self.ln(5)
-        self.rect(5,5,200,287)
+        self.set_font("Arial", "B", 16)
+        self.cell(0, 10, "Meeting Minutes", ln=True, align="C")
+        self.ln(10)
+
     def footer(self):
         self.set_y(-15)
-        self.set_font("Arial","I",10)
-        self.cell(0,10,f"Page {self.page_no()}",align="C")
-    def section(self, title, text):
-        self.set_font("Arial","B",12)
-        self.cell(0,8,title,ln=True,border="B")
-        self.set_font("Arial","",11)
-        self.multi_cell(0,7,text)
-        self.ln(5)
-    def bullets(self, title, items):
-        self.set_font("Arial","B",12)
-        self.cell(0,8,title,ln=True,border="B")
-        self.set_font("Arial","",11)
-        for i,item in enumerate(items):
-            if i==10:
-                self.cell(5); self.cell(0,7,f"+{len(items)-10} more",ln=True); break
-            self.cell(5); self.cell(0,7,f"- {item.strip()}",ln=True)
+        self.set_font("Arial", "I", 8)
+        self.cell(0, 10, f"Page {self.page_no()}", 0, 0, "C")
+
+    def add_section(self, title, content):
+        self.set_font("Arial", "B", 12)
+        self.cell(0, 10, title, ln=True)
+        self.set_font("Arial", "", 11)
+        self.multi_cell(0, 8, content)
         self.ln(5)
 
-# ─── METADATA EXTRACTION ───────────────────
+    def add_bullet_points(self, title, points):
+        self.set_font("Arial", "B", 12)
+        self.cell(0, 10, title, ln=True)
+        self.set_font("Arial", "", 11)
+        for point in points:
+            self.cell(5)
+            self.cell(0, 8, f"• {point.strip()}", ln=True)
+        self.ln(5)
 
-def extract_meta(text):
-    # date
-    m = re.search(r"\b\d{1,2} (?:January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b", text)
-    date = m.group(0) if m else datetime.today().strftime("%d %B %Y")
-    # attendees
+# ——— Helper: Extract Metadata ———
+def extract_metadata(text):
     doc = spacy_nlp(text)
-    attendees = list({ent.text for ent in doc.ents if ent.label_=="PERSON"})
+    date_match = re.search(r"\b\d{1,2} \w+ \d{4}\b", text)
+    date = date_match.group() if date_match else datetime.now().strftime("%d %B %Y")
+    attendees = list({ent.text for ent in doc.ents if ent.label_ == "PERSON"})
     return date, attendees
 
-# ─── STREAMLIT UI ───────────────────────────
-
+# ——— Streamlit UI ———
 st.title("🎤 Meeting Minutes Generator")
 
-uploaded = st.file_uploader("Upload audio (.mp3/.wav/.m4a)", type=["mp3","wav","m4a"])
-if not uploaded:
-    st.info("Please upload an audio file to begin.")
-    st.stop()
+uploaded_file = st.file_uploader("Upload your meeting audio (.mp3, .wav, .m4a)", type=["mp3", "wav", "m4a"])
 
-# save to temp file
-ext = os.path.splitext(uploaded.name)[1]
-tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
-tmp.write(uploaded.read())
-tmp.close()
+if uploaded_file is not None:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+        tmp.write(uploaded_file.read())
+        audio_path = tmp.name
 
-# transcribe
-st.info("⏳ Transcribing with Whisper…")
-def load_audio_ffmpeg(file_path):
-    cmd = [
-        "ffmpeg", "-i", file_path,
-        "-f", "f32le", "-ar", "16000", "-ac", "1", "pipe:1"
-    ]
-    out = subprocess.check_output(cmd)
-    audio = np.frombuffer(out, np.float32)
-    return audio
+    st.info("Transcribing using Whisper...")
+    try:
+        result = whisper_model.transcribe(audio_path)
+        transcript = result["text"]
+        st.success("Transcription complete!")
+        st.text_area("Transcript", transcript[:2000], height=300)
+    except Exception as e:
+        st.error(f"Transcription failed: {e}")
+        os.remove(audio_path)
+        st.stop()
+    os.remove(audio_path)
 
-try:
-    audio = load_audio_ffmpeg(tmp.name)
-    result = whisper_model.transcribe(audio, language='en')
-    transcript = result["text"]
-    st.success("Transcription complete!")
-    st.text_area("Transcript", transcript[:2000], height=300)
-except Exception as e:
-    import traceback
-    st.error("Failed to transcribe.")
-    st.text(traceback.format_exc())
+    st.info("Generating Meeting Summary and Insights...")
+    summary = summary_chain.invoke({"transcript": transcript})
+    date, attendees = extract_metadata(transcript)
+    action_items = qa_chain.invoke({"question": "What are the action items and responsibilities?", "context": transcript})
+    next_steps = qa_chain.invoke({"question": "What are the next steps?", "context": transcript})
+    closing = qa_chain.invoke({"question": "Summarize the closing remarks.", "context": transcript})
 
-# summarize & extract
-st.info("🧠 Generating summary & extraction…")
-summary     = summary_chain.invoke({"transcript": transcript[:1000]})
-date, ppl    = extract_meta(transcript)
-actions     = qa_chain.invoke({"question":"Extract the action items and responsibilities:", "context":transcript})
-next_steps  = qa_chain.invoke({"question":"List next steps and follow‑ups:", "context":transcript})
-closing     = qa_chain.invoke({"question":"Summarize the closing remarks:",       "context":transcript})
-st.success("🎉 Done")
+    st.success("Analysis complete!")
 
-# preview
-st.subheader("📄 Preview")
-st.write(f"**Date:** {date}")
-st.write(f"**Attendees:** {', '.join(ppl)}")
-st.write("**Summary:**", summary)
-st.write("**Action Items:**", actions)
-st.write("**Next Steps:**", next_steps)
-st.write("**Closing Remarks:**", closing)
+    # Display results
+    st.subheader("📝 Meeting Summary")
+    st.write("**Date:**", date)
+    st.write("**Attendees:**", ", ".join(attendees))
+    st.write("**Summary:**", summary)
+    st.write("**Action Items:**", action_items)
+    st.write("**Next Steps:**", next_steps)
+    st.write("**Closing Remarks:**", closing)
 
-# build PDF
-pdf = MeetingMinutesPDF()
-pdf.add_page()
-pdf.section("Date",     date)
-pdf.section("Time",     datetime.now().strftime("%I:%M %p"))
-pdf.bullets("Attendees", ppl)
-pdf.section("Meeting Overview", summary)
-pdf.section("Action Items",     actions)
-pdf.section("Next Steps",       next_steps)
-pdf.section("Closing Remarks",  closing)
+    # Generate PDF
+    pdf = MeetingPDF()
+    pdf.add_page()
+    pdf.add_section("Date", date)
+    pdf.add_bullet_points("Attendees", attendees)
+    pdf.add_section("Meeting Summary", summary)
+    pdf.add_section("Action Items", action_items)
+    pdf.add_section("Next Steps", next_steps)
+    pdf.add_section("Closing Remarks", closing)
 
-out = os.path.join(tempfile.gettempdir(), "minutes.pdf")
-pdf.output(out)
-with open(out,"rb") as f:
-    st.download_button("📥 Download PDF", f, "Meeting_Minutes.pdf", "application/pdf")
+    pdf_path = os.path.join(tempfile.gettempdir(), "meeting_minutes.pdf")
+    pdf.output(pdf_path)
+
+    with open(pdf_path, "rb") as f:
+        st.download_button("📄 Download Meeting Minutes PDF", f, file_name="Meeting_Minutes.pdf", mime="application/pdf")
